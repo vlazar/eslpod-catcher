@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+
+INDEX     = 'ESLPod.txt'
+FOLDER    = 'ESLPod'
+
+BASE_URL  = 'http://www.eslpod.com/website/'
+START_URL = "#{BASE_URL}show_all.php"
+NEXT_LINK = 'a:contains("next")'
+MP3_LINK  = 'a[href$=".mp3"]'
+
+require 'rubygems'
+require 'bundler/setup'
+require 'open-uri'
+require 'nokogiri'
+
+def all_mp3s(url)
+  [].tap do |mp3s|
+    begin
+      document = Nokogiri::HTML(open(url))
+      mp3s.concat(page_mp3s(document))
+      yield(mp3s.length)
+    end while(url = next_page(document))
+  end
+end
+
+def page_mp3s(document)
+  document.css(MP3_LINK).map { |a| a['href'].strip }
+end
+
+def next_page(document)
+  next_links = document.css(NEXT_LINK)
+  [ BASE_URL, next_links[0]['href'] ].join if next_links.size > 0
+end
+
+def create_index
+  mp3s = all_mp3s(START_URL) { |n| print "\rCreating index... #{n} MP3s" }
+  File.write(INDEX, mp3s.join("\n"))
+  puts "\nIndex has been saved to #{INDEX}"
+end
+
+def download_mp3s
+  puts "Downloading MP3s to #{FOLDER}..."
+  %x(wget --input-file=#{INDEX} --directory-prefix=#{FOLDER} --timestamping --no-verbose)
+end
+
+create_index
+download_mp3s
